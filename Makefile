@@ -135,7 +135,7 @@ local:
 
 build-images: build
 	@docker build -t ${IMAGE_NAME_AND_VERSION} -f build/Dockerfile .
-	@docker tag ${IMAGE_NAME_AND_VERSION} $(REGISTRY)/$(IMG):latest
+	@docker tag ${IMAGE_NAME_AND_VERSION} $(REGISTRY)/$(IMG):canary
 
 build-latest-community-operator:
 	docker tag ${COMPONENT_DOCKER_REPO}/${COMPONENT_NAME}:${COMPONENT_VERSION}${COMPONENT_TAG_EXTENSION} ${COMPONENT_DOCKER_REPO}/${COMPONENT_NAME}:latest
@@ -207,9 +207,11 @@ deploy-community-managed:
 	kubectl apply -f deploy/common
 	kubectl -n multicluster-operators delete secret appmgr-hub-kubeconfig --ignore-not-found
 	kubectl -n multicluster-operators create secret generic appmgr-hub-kubeconfig --from-file=kubeconfig=/tmp/kubeconfig
-	sed -i 's/<managed cluster name>/$(MANAGED_CLUSTER_NAME)/g' deploy/managed/operator.yaml
-	sed -i 's/<managed cluster namespace>/$(MANAGED_CLUSTER_NAME)/g' deploy/managed/operator.yaml
-	kubectl apply -f deploy/managed
+	mkdir -p munge-manifests
+	cp deploy/managed/operator.yaml munge-manifests/operator.yaml
+	sed -i 's/<managed cluster name>/$(MANAGED_CLUSTER_NAME)/g' munge-manifests/operator.yaml
+	sed -i 's/<managed cluster namespace>/$(MANAGED_CLUSTER_NAME)/g' munge-manifests/operator.yaml
+	kubectl apply -f munge-manifests/operator.yaml
 
 
 ############################################################

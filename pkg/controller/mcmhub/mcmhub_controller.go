@@ -462,6 +462,33 @@ func (r *ReconcileSubscription) setHubSubscriptionStatus(sub *appv1.Subscription
 	}
 }
 
+// If placement was updated and instance carries a special annotation, then pause subscription.
+// Subscription would be unpaused by user, by removing the pause annotation, resulting in a
+// future reconcile due to a change in the Subscription
+func updatePauseLabel(placementDecisionUpdated bool, instance *subv1.Subscription) {
+	if !placementDecisionUpdated {
+		return
+	}
+
+	labels := instance.GetLabels()
+	if labels == nil ||
+		labels["ramendr"] == "" ||
+		!strings.EqualFold(labels["ramendr"], "protected") {
+		return
+	}
+
+	klog.Info("pausing subscription due to ramen label and placement rule change")
+
+	if labels[subv1.LabelSubscriptionPause] != "" &&
+		strings.EqualFold(labels[subv1.LabelSubscriptionPause], "true") {
+		return
+	}
+
+	klog.Info("updating pause labels")
+	labels[subv1.LabelSubscriptionPause] = "true"
+	instance.SetLabels(labels)
+}
+
 // Reconcile reads that state of the cluster for a Subscription object and makes changes based on the state read
 // and what is in the Subscription.Spec
 func (r *ReconcileSubscription) Reconcile(request reconcile.Request) (result reconcile.Result, returnErr error) {
@@ -523,6 +550,9 @@ func (r *ReconcileSubscription) Reconcile(request reconcile.Request) (result rec
 
 	// for later comparison
 	oins = instance.DeepCopy()
+
+	updatePauseLabel(placementDecisionUpdated, instance)
+	klog.Infof("subscription labels %v (was, %v)\n", instance.GetLabels(), oins.GetLabels())
 
 	// process as hub subscription, generate deployable to propagate
 	pl := instance.Spec.Placement
